@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -28,7 +27,7 @@ func TestAccElasticstackAuthUserBasic(t *testing.T) {
 }
 
 func testAccCheckElasticstackAuthUserDestroy(s *terraform.State) error {
-	es := testAccProvider.Meta().(*elasticsearch.Client)
+	es := testAccProvider.Meta().(*apiClient).es
 
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "elasticstack_auth_user" {

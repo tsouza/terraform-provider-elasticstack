@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -183,7 +182,7 @@ func parseRoleData(d *schema.ResourceData) (esapiRoleData, error) {
 }
 
 func resourceElasticstackAuthRoleCreate(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	roleData, err := parseRoleData(d)
 	if err != nil {
@@ -214,7 +213,7 @@ func resourceElasticstackAuthRoleCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceElasticstackAuthRoleRead(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	name := d.Get("name").(string)
 
@@ -291,7 +290,7 @@ func resourceElasticstackAuthRoleUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceElasticstackAuthRoleDelete(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	name := d.Get("name").(string)
 	req := esapi.SecurityDeleteRoleRequest{

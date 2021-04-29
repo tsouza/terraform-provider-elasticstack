@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -89,7 +88,7 @@ func parseUserResourceData(d *schema.ResourceData) (esapiUserData, error) {
 }
 
 func resourceElasticstackAuthUserCreate(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	userData, err := parseUserResourceData(d)
 	if err != nil {
@@ -120,7 +119,7 @@ func resourceElasticstackAuthUserCreate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceElasticstackAuthUserRead(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	username := d.Get("username").(string)
 
@@ -164,7 +163,7 @@ func resourceElasticstackAuthUserUpdate(d *schema.ResourceData, meta interface{}
 }
 
 func resourceElasticstackAuthUserDelete(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*elasticsearch.Client)
+	es := meta.(*apiClient).es
 
 	username := d.Get("username").(string)
 	req := esapi.SecurityDeleteUserRequest{
