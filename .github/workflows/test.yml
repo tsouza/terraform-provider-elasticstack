@@ -72,8 +72,8 @@ jobs:
     - name: TF unit tests
       timeout-minutes: 10
       env:
-        TF_ACC: "0" #acceptance tests need an elastic cluster, not setup yet
-        TF_ACC_TERRAFORM_VERSION: ${{ matrix.terraform }}
+        #TF_ACC: "1" #acceptance tests need an elastic cluster, not setup yet
+        #TF_ACC_TERRAFORM_VERSION: ${{ matrix.terraform }}
 
         # Set whatever additional acceptance test env vars here. You can
         # optionally use data from your repository secrets using the
