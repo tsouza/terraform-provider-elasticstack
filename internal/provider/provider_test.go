@@ -1,18 +1,20 @@
 package provider
 
 import (
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// providerFactories are used to instantiate a provider during acceptance testing.
-// The factory function will be invoked for every Terraform CLI command executed
-// to create a provider server to which the CLI can reattach.
-var providerFactories = map[string]func() (*schema.Provider, error){
-	"elasticstack": func() (*schema.Provider, error) {
-		return New("dev")(), nil
-	},
+var testAccProviders map[string]*schema.Provider
+var testAccProvider *schema.Provider
+
+func init() {
+	testAccProvider = New("dev")()
+	testAccProviders = map[string]*schema.Provider{
+		"elasticstack": testAccProvider,
+	}
 }
 
 func TestProvider(t *testing.T) {
@@ -22,7 +24,13 @@ func TestProvider(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
-	// You can add code here to run prior to any test case execution, for example assertions
-	// about the appropriate environment variables being set are common to see in a pre-check
-	// function.
+	if err := os.Getenv("ELASTICSEARCH_URL"); err == "" {
+		t.Fatal("ELASTICSEARCH_URL must be set for acceptance tests")
+	}
+	if err := os.Getenv("ELASTICSEARCH_USER"); err == "" {
+		t.Fatal("ELASTICSEARCH_USER must be set for acceptance tests")
+	}
+	if err := os.Getenv("ELASTICSEARCH_PASSWORD"); err == "" {
+		t.Fatal("ELASTICSEARCH_PASSWORD must be set for acceptance tests")
+	}
 }
