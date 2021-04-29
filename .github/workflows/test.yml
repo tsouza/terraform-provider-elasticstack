@@ -69,10 +69,10 @@ jobs:
       run: |
         go mod download
         
-    - name: TF acceptance tests
+    - name: TF unit tests
       timeout-minutes: 10
       env:
-        TF_ACC: "1"
+        TF_ACC: "0" #acceptance tests need an elastic cluster, not setup yet
         TF_ACC_TERRAFORM_VERSION: ${{ matrix.terraform }}
 
         # Set whatever additional acceptance test env vars here. You can
