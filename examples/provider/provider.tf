@@ -1,3 +1,3 @@
-provider "scaffolding" {
+provider "elasticstack" {
   # example configuration here
 }
