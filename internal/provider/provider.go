@@ -109,7 +109,6 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 
 		k := resty.New().
 			SetHeader("kbn-xsrf", "true").
-			SetAuthScheme("Basic").
 			SetBasicAuth(username, password).
 			SetHostURL(d.Get("kibana_url").(string))
 
