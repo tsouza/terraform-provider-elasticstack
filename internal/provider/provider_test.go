@@ -24,6 +24,9 @@ func TestProvider(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	if err := os.Getenv("KIBANA_URL"); err == "" {
+		t.Fatal("KIBANA_URL must be set for acceptance tests")
+	}
 	if err := os.Getenv("ELASTICSEARCH_URL"); err == "" {
 		t.Fatal("ELASTICSEARCH_URL must be set for acceptance tests")
 	}

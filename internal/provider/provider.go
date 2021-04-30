@@ -5,6 +5,8 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v7"
 
+	"github.com/go-resty/resty/v2"
+
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -35,6 +37,14 @@ func newSchema() map[string]*schema.Schema {
 				"ELASTICSEARCH_URL", "",
 			),
 		},
+		"kibana_url": {
+			Description: "Kibana URL to use for API Authentication.",
+			Type:        schema.TypeString,
+			Required:    true,
+			DefaultFunc: schema.EnvDefaultFunc(
+				"KIBANA_URL", "",
+			),
+		},
 		"username": {
 			Description: "Username to use for API authentication.",
 			Type:        schema.TypeString,
@@ -60,9 +70,10 @@ func New(version string) func() *schema.Provider {
 		p := &schema.Provider{
 			Schema: newSchema(),
 			ResourcesMap: map[string]*schema.Resource{
-				"elasticstack_auth_user":         resourceElasticstackAuthUser(),
-				"elasticstack_auth_role":         resourceElasticstackAuthRole(),
-				"elasticstack_auth_role_mapping": resourceElasticstackAuthRoleMapping(),
+				"elasticstack_auth_user":          resourceElasticstackAuthUser(),
+				"elasticstack_auth_role":          resourceElasticstackAuthRole(),
+				"elasticstack_auth_role_mapping":  resourceElasticstackAuthRoleMapping(),
+				"elasticstack_fleet_agent_policy": resourceElasticstackFleetAgentPolicy(),
 			},
 		}
 
@@ -72,14 +83,22 @@ func New(version string) func() *schema.Provider {
 	}
 }
 
+type apiClient struct {
+	es *elasticsearch.Client
+	k  *resty.Client
+}
+
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
 		var diags diag.Diagnostics
 
+		username := d.Get("username").(string)
+		password := d.Get("password").(string)
+
 		es, err := elasticsearch.NewClient(elasticsearch.Config{
 			Addresses: []string{d.Get("elasticsearch_url").(string)},
-			Username:  d.Get("username").(string),
-			Password:  d.Get("password").(string),
+			Username:  username,
+			Password:  password,
 		})
 		if err != nil {
 			diags = append(diags, diag.Diagnostic{
@@ -89,6 +108,20 @@ func configure(version string, p *schema.Provider) func(context.Context, *schema
 			})
 		}
 
-		return es, diags
+		k := resty.New().
+			SetHeader("kbn-xsrf", "true").
+			SetBasicAuth(username, password).
+			SetHostURL(d.Get("kibana_url").(string))
+
+		_, err = k.R().Get("/")
+		if err != nil {
+			diags = append(diags, diag.Diagnostic{
+				Severity: diag.Error,
+				Summary:  "Unable to create Kibana client",
+				Detail:   err.Error(),
+			})
+		}
+
+		return apiClient{es, k}, diags
 	}
 }

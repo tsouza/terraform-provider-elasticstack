@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go v1.38.28 // indirect
 	github.com/elastic/go-elasticsearch/v7 v7.12.0
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/go-resty/resty/v2 v2.6.0
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.0 // indirect
