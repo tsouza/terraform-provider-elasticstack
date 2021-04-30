@@ -70,9 +70,10 @@ func New(version string) func() *schema.Provider {
 		p := &schema.Provider{
 			Schema: newSchema(),
 			ResourcesMap: map[string]*schema.Resource{
-				"elasticstack_auth_user":         resourceElasticstackAuthUser(),
-				"elasticstack_auth_role":         resourceElasticstackAuthRole(),
-				"elasticstack_auth_role_mapping": resourceElasticstackAuthRoleMapping(),
+				"elasticstack_auth_user":          resourceElasticstackAuthUser(),
+				"elasticstack_auth_role":          resourceElasticstackAuthRole(),
+				"elasticstack_auth_role_mapping":  resourceElasticstackAuthRoleMapping(),
+				"elasticstack_fleet_agent_policy": resourceElasticstackFleetAgentPolicy(),
 			},
 		}
 
@@ -83,8 +84,8 @@ func New(version string) func() *schema.Provider {
 }
 
 type apiClient struct {
-	es	*elasticsearch.Client
-	k	*resty.Client
+	es *elasticsearch.Client
+	k  *resty.Client
 }
 
 func configure(version string, p *schema.Provider) func(context.Context, *schema.ResourceData) (interface{}, diag.Diagnostics) {

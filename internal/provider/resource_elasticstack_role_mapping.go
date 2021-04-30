@@ -137,7 +137,7 @@ func parseRoleMappingData(d *schema.ResourceData) (esapiRoleMappingData, error) 
 }
 
 func resourceElasticstackAuthRoleMappingCreate(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*apiClient).es
+	es := meta.(apiClient).es
 
 	roleMappingData, err := parseRoleMappingData(d)
 	if err != nil {
@@ -168,7 +168,7 @@ func resourceElasticstackAuthRoleMappingCreate(d *schema.ResourceData, meta inte
 }
 
 func resourceElasticstackAuthRoleMappingRead(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*apiClient).es
+	es := meta.(apiClient).es
 
 	name := d.Get("name").(string)
 
@@ -236,7 +236,7 @@ func resourceElasticstackAuthRoleMappingUpdate(d *schema.ResourceData, meta inte
 }
 
 func resourceElasticstackAuthRoleMappingDelete(d *schema.ResourceData, meta interface{}) error {
-	es := meta.(*apiClient).es
+	es := meta.(apiClient).es
 
 	name := d.Get("name").(string)
 	req := esapi.SecurityDeleteRoleMappingRequest{
