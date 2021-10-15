@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.15.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/aws/aws-sdk-go v1.38.28 // indirect
-	github.com/elastic/go-elasticsearch/v7 v7.12.0
+	github.com/elastic/go-elasticsearch/v7 v7.15.1
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/go-resty/resty/v2 v2.6.0
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect

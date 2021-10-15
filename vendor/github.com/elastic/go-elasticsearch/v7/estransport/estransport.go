@@ -1,11 +1,25 @@
-// Licensed to Elasticsearch B.V. under one or more agreements.
-// Elasticsearch B.V. licenses this file to you under the Apache 2.0 License.
-// See the LICENSE file in the project root for more information.
+// Licensed to Elasticsearch B.V. under one or more contributor
+// license agreements. See the NOTICE file distributed with
+// this work for additional information regarding copyright
+// ownership. Elasticsearch B.V. licenses this file to you under
+// the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
 
 package estransport
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -17,6 +31,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,14 +39,21 @@ import (
 	"github.com/elastic/go-elasticsearch/v7/internal/version"
 )
 
-// Version returns the package version as a string.
-//
-const Version = version.Client
+const (
+	// Version returns the package version as a string.
+	Version = version.Client
+
+	// esCompatHeader defines the env var for Compatibility header.
+	esCompatHeader = "ELASTIC_CLIENT_APIVERSIONING"
+
+	userAgentHeader = "User-Agent"
+)
 
 var (
-	userAgent   string
-	metaHeader  string
-	reGoVersion = regexp.MustCompile(`go(\d+\.\d+\..+)`)
+	userAgent           string
+	metaHeader          string
+	compatibilityHeader bool
+	reGoVersion         = regexp.MustCompile(`go(\d+\.\d+\..+)`)
 
 	defaultMaxRetries    = 3
 	defaultRetryOnStatus = [...]int{502, 503, 504}
@@ -40,6 +62,9 @@ var (
 func init() {
 	userAgent = initUserAgent()
 	metaHeader = initMetaHeader()
+
+	compatHeaderEnv := os.Getenv(esCompatHeader)
+	compatibilityHeader, _ = strconv.ParseBool(compatHeaderEnv)
 }
 
 // Interface defines the interface for HTTP client.
@@ -51,10 +76,11 @@ type Interface interface {
 // Config represents the configuration of HTTP client.
 //
 type Config struct {
-	URLs     []*url.URL
-	Username string
-	Password string
-	APIKey   string
+	URLs         []*url.URL
+	Username     string
+	Password     string
+	APIKey       string
+	ServiceToken string
 
 	Header http.Header
 	CACert []byte
@@ -64,6 +90,8 @@ type Config struct {
 	EnableRetryOnTimeout bool
 	MaxRetries           int
 	RetryBackoff         func(attempt int) time.Duration
+
+	CompressRequestBody bool
 
 	EnableMetrics     bool
 	EnableDebugLogger bool
@@ -84,20 +112,23 @@ type Config struct {
 type Client struct {
 	sync.Mutex
 
-	urls     []*url.URL
-	username string
-	password string
-	apikey   string
-	header   http.Header
+	urls         []*url.URL
+	username     string
+	password     string
+	apikey       string
+	servicetoken string
+	header       http.Header
 
 	retryOnStatus         []int
 	disableRetry          bool
 	enableRetryOnTimeout  bool
-	disableMetaHeader	  bool
+	disableMetaHeader     bool
 	maxRetries            int
 	retryBackoff          func(attempt int) time.Duration
 	discoverNodesInterval time.Duration
 	discoverNodesTimer    *time.Timer
+
+	compressRequestBody bool
 
 	metrics *metrics
 
@@ -147,19 +178,22 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	client := Client{
-		urls:     cfg.URLs,
-		username: cfg.Username,
-		password: cfg.Password,
-		apikey:   cfg.APIKey,
-		header:   cfg.Header,
+		urls:         cfg.URLs,
+		username:     cfg.Username,
+		password:     cfg.Password,
+		apikey:       cfg.APIKey,
+		servicetoken: cfg.ServiceToken,
+		header:       cfg.Header,
 
 		retryOnStatus:         cfg.RetryOnStatus,
 		disableRetry:          cfg.DisableRetry,
 		enableRetryOnTimeout:  cfg.EnableRetryOnTimeout,
-		disableMetaHeader:      cfg.DisableMetaHeader,
+		disableMetaHeader:     cfg.DisableMetaHeader,
 		maxRetries:            cfg.MaxRetries,
 		retryBackoff:          cfg.RetryBackoff,
 		discoverNodesInterval: cfg.DiscoverNodesInterval,
+
+		compressRequestBody: cfg.CompressRequestBody,
 
 		transport: cfg.Transport,
 		logger:    cfg.Logger,
@@ -205,6 +239,14 @@ func (c *Client) Perform(req *http.Request) (*http.Response, error) {
 		err error
 	)
 
+	// Compatibility Header
+	if compatibilityHeader {
+		if req.Body != nil {
+			req.Header.Set("Content-Type", "application/vnd.elasticsearch+json;compatible-with=7")
+		}
+		req.Header.Set("Accept", "application/vnd.elasticsearch+json;compatible-with=7")
+	}
+
 	// Record metrics, when enabled
 	if c.metrics != nil {
 		c.metrics.Lock()
@@ -217,16 +259,36 @@ func (c *Client) Perform(req *http.Request) (*http.Response, error) {
 	c.setReqGlobalHeader(req)
 	c.setMetaHeader(req)
 
-	if req.Body != nil && req.Body != http.NoBody && req.GetBody == nil {
-		if !c.disableRetry || (c.logger != nil && c.logger.RequestBodyEnabled()) {
+	if req.Body != nil && req.Body != http.NoBody {
+		if c.compressRequestBody {
 			var buf bytes.Buffer
-			buf.ReadFrom(req.Body)
+			zw := gzip.NewWriter(&buf)
+			if _, err := io.Copy(zw, req.Body); err != nil {
+				return nil, fmt.Errorf("failed to compress request body: %s", err)
+			}
+			if err := zw.Close(); err != nil {
+				return nil, fmt.Errorf("failed to compress request body (during close): %s", err)
+			}
+
 			req.GetBody = func() (io.ReadCloser, error) {
 				r := buf
 				return ioutil.NopCloser(&r), nil
 			}
-			if req.Body, err = req.GetBody(); err != nil {
-				return nil, fmt.Errorf("cannot get request body: %s", err)
+			req.Body, _ = req.GetBody()
+
+			req.Header.Set("Content-Encoding", "gzip")
+			req.ContentLength = int64(buf.Len())
+
+		} else if req.GetBody == nil {
+			if !c.disableRetry || (c.logger != nil && c.logger.RequestBodyEnabled()) {
+				var buf bytes.Buffer
+				buf.ReadFrom(req.Body)
+
+				req.GetBody = func() (io.ReadCloser, error) {
+					r := buf
+					return ioutil.NopCloser(&r), nil
+				}
+				req.Body, _ = req.GetBody()
 			}
 		}
 	}
@@ -336,7 +398,19 @@ func (c *Client) Perform(req *http.Request) (*http.Response, error) {
 
 		// Delay the retry if a backoff function is configured
 		if c.retryBackoff != nil {
-			time.Sleep(c.retryBackoff(i + 1))
+			var cancelled bool
+			backoff := c.retryBackoff(i + 1)
+			timer := time.NewTimer(backoff)
+			select {
+			case <-req.Context().Done():
+				err = req.Context().Err()
+				cancelled = true
+				timer.Stop()
+			case <-timer.C:
+			}
+			if cancelled {
+				break
+			}
 		}
 	}
 
@@ -383,6 +457,15 @@ func (c *Client) setReqAuth(u *url.URL, req *http.Request) *http.Request {
 			return req
 		}
 
+		if c.servicetoken != "" {
+			var b bytes.Buffer
+			b.Grow(len("Bearer ") + len(c.servicetoken))
+			b.WriteString("Bearer ")
+			b.WriteString(c.servicetoken)
+			req.Header.Set("Authorization", b.String())
+			return req
+		}
+
 		if c.username != "" && c.password != "" {
 			req.SetBasicAuth(c.username, c.password)
 			return req
@@ -393,7 +476,14 @@ func (c *Client) setReqAuth(u *url.URL, req *http.Request) *http.Request {
 }
 
 func (c *Client) setReqUserAgent(req *http.Request) *http.Request {
-	req.Header.Set("User-Agent", userAgent)
+	if len(c.header) > 0 {
+		ua := c.header.Get(userAgentHeader)
+		if ua != "" {
+			req.Header.Set(userAgentHeader, ua)
+			return req
+		}
+	}
+	req.Header.Set(userAgentHeader, userAgent)
 	return req
 }
 
@@ -418,7 +508,7 @@ func (c *Client) setMetaHeader(req *http.Request) *http.Request {
 
 	existingMetaHeader := req.Header.Get(HeaderClientMeta)
 	if existingMetaHeader != "" {
-		req.Header.Set(HeaderClientMeta, strings.Join([]string{metaHeader, existingMetaHeader},","))
+		req.Header.Set(HeaderClientMeta, strings.Join([]string{metaHeader, existingMetaHeader}, ","))
 	} else {
 		req.Header.Add(HeaderClientMeta, metaHeader)
 	}
